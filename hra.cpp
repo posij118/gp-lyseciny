@@ -1,7 +1,10 @@
-#include<bits/stdc++.h>
+#include <vector>
+#include <algorithm>
+#include <iostream>
 #include <chrono>
+#include <thread>
 #include <pthread.h>
-#define MAX_LENGTH     50
+#include <signal.h>
 using namespace std;
 
 // Debug musí být false.
@@ -19,6 +22,49 @@ struct Deposit{
     int i;
 };
 
+template <typename T> class Resources{
+    public:
+        T iron = 0;
+        T copper = 0;
+        T oil = 0;
+
+        T machines = 0;
+        T circuits = 0;
+        T plastic = 0;
+
+        T rocket = 0;
+        T boosters = 0;
+        T rocket_fuel = 0;
+
+        int time = -1;
+
+        Resources(vector<pair<int, T> > nonzero){
+            for(auto resource: nonzero){
+                switch(resource.first){
+                    case 0:
+                        this -> iron = resource.second;
+                    case 1:
+                        this -> copper = resource.second;
+                    case 2:
+                        this -> oil = resource.second;
+                    case 3:
+                        this -> machines = resource.second;
+                    case 4:
+                        this -> circuits = resource.second;
+                    case 5:
+                        this -> plastic = resource.second;
+                    case 6:
+                        this -> rocket = resource.second;
+                    case 7:
+                        this -> boosters = resource.second;
+                    case 8:
+                        this -> rocket_fuel = resource.second;
+
+                }
+            }
+        }
+};
+
 // Parametry
 int INIT_IRON_STORED = 2000;
 int INIT_COPPER_STORED = 2000;
@@ -33,14 +79,10 @@ vector<Deposit> OIL_DEPOSITS = {};
 
 
 // Proměnné zachycující současný stav
-
-int iron_stored = INIT_IRON_STORED;
-int copper_stored = INIT_COPPER_STORED;
-int oil_stored = INIT_OIL_STORED;
-
-int iron_production = IRON_PRODUCTION;
-int copper_production = COPPER_PRODUCTION;
-int oil_production = OIL_PRODUCTION;
+vector<pair<int, int> > st = {make_pair(0, INIT_IRON_STORED), make_pair(1, INIT_COPPER_STORED), make_pair(2, INIT_OIL_STORED)};
+Resources<int> stored = Resources(st);
+vector<pair<int, double> > prod = {make_pair(0, (double)IRON_PRODUCTION), make_pair(1, (double)COPPER_PRODUCTION), make_pair(2, (double)OIL_PRODUCTION)};
+Resources<double> production = Resources(prod);
 
 vector<vector<int> > belt_graph;
 vector<vector<int> > train_graph;
@@ -50,33 +92,51 @@ vector<int> iron_deposits_activated;
 vector<int> copper_deposits_activated;
 vector<int> oil_deposits_activated;
 
-bool stop_input = true;
+void initValues(){
+
+}
+
+// Pomocné funkce
+
+
+// Nesahat, jinak se to rozbije.
+string first_char_user_input_read = "";
 
 void *readInput(void* input){
-    getline(cin, *static_cast<string*>(input));
-    pthread_exit(NULL);
+    while(true){
+        getline(cin, *static_cast<string*>(input));
+        char a;
+        cin.get(a);
+        first_char_user_input_read = a;
+    }
+    //pthread_exit(NULL);
 }
 
 int main(){
     cout << "Hra začíná. Za celé politbyro vám přeji hodně štěstí." << endl;
 
+    // Nesahat, jinak se to rozbije.
     chrono::milliseconds timespan(1000);
-    string user_input;
+    string user_input_read = "";
     int rc;
+    pthread_t input_thread;
+    rc = pthread_create(&input_thread, NULL, readInput, &user_input_read);
 
-
+    initValues();
     while(1){
         // Jeden tik je jedna vteřina.
-        user_input = "";
-        pthread_t input_thread;
-        rc = pthread_create(&input_thread, NULL, readInput, &user_input);
         this_thread::sleep_for(timespan);
-        pthread_kill(input_thread, 3);
+
+        // Nesahat, jinak se to rozbije.
+        string user_input = "";
+
+        if(user_input_read != ""){
+            user_input = first_char_user_input_read + user_input_read;
+            user_input_read.clear();
+        }
 
         if(debug){
             cout << "ONE_TICK" << endl;
         }
-
-        cout << user_input << endl;
     }
 }
