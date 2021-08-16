@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <iostream>
 #include <set>
+#include <map>
+#include <queue>
+#include <random>
 #include <iomanip>
 #include <chrono>
 #include <thread>
@@ -21,13 +24,13 @@ class Deposit{
         char type;    // Jedno z 'i', 'c', 'o'
         string code;    // Náhodný třípísmenný kencr, který zadávají.
 
-        int capacity;
-        int speed;
+        double capacity;
+        double speed;
         int level;
 
         int i;
 
-        Deposit(char type, string code, int capacity, int speed, int level, int i){
+        Deposit(char type, string code, double capacity, double speed, int level, int i){
             this -> type = type;
             this -> code = code;
             this -> capacity = capacity;
@@ -185,15 +188,13 @@ double GLOBAL_TRANSPORT_COST_COEFFICIENT = 80000;
 double BELT_IRON_COST = 3;
 double BELT_COPPER_COST = 1;
 
-double BELT_CAPACITY = 0.5;
-
 double TRAIN_IRON_COST = 2;
 double TRAIN_COPPER_COST = 1;
 double TRAIN_MACHINES_COST = 1;
 double TRAIN_CIRCUITS_COST = 0.25;
 double TRAIN_PLASTIC_COST = 0.25;
 
-double TRAIN_CAPACITY = 5;
+double TRAIN_CAPACITY = 10;
 
 double PIPE_COPPER_COST = 3;
 double PIPE_IRON_COST = 1;
@@ -255,7 +256,7 @@ vector<Deposit> OIL_DEPOSITS = {
     Deposit('o', "lae", 1000000, 90, 2, 37)
 };
 
-set<string> commands = {"mine", "belt", "train", "pipe", "make", "build", "stored", "depo", "skip", "prod", "buildings"};
+set<string> commands = {"mine", "belt", "train", "pipe", "make", "build", "stored", "depo", "skip", "prod", "buildings", "ratio"};
 
 // Inicializace objektů surovin
 vector<pair<int, double> > st_i = {make_pair(0, INIT_IRON_STORED), make_pair(1, INIT_COPPER_STORED), make_pair(2, INIT_OIL_STORED)};
@@ -283,18 +284,32 @@ Resources<double> copper_deposit_2_cost = Resources(copper_deposit_2_i);
 vector<pair<int, double> > oil_deposit_2_i = {{0, OIL_DEPOSIT_2_IRON_COST}, {1, OIL_DEPOSIT_2_COPPER_COST}};
 Resources<double> oil_deposit_2_cost = Resources(oil_deposit_2_i);
 
-vector<Deposit> all_deposits(IRON_DEPOSITS);
+// Pomocné proměnné
+
+map<int, int> indices_in_all_deposits_by_index; // Ukládají se změny během jednoho tiku
+vector<Deposit> all_deposits(IRON_DEPOSITS);  // Neukládají se změny během jednoho tiku
+vector<pair<int, double> > zero_vector = {{}};
+Resources<double> prod_from_belts = Resources(zero_vector);
+Resources<double> prod_from_trains = Resources(zero_vector);
+Resources<double> prod_from_craft = Resources(zero_vector);
 
 // Proměnné zachycující současný stav
-vector<vector<int> > belt_graph(points.size());
+
+vector<vector<pair<int, int> > > belt_graph(points.size());  // vrchol, id hrany
 vector<vector<int> > train_graph(points.size());
 vector<vector<int> > pipe_graph(points.size());
 
-vector<Deposit> iron_deposits_activated;
+vector<Deposit> iron_deposits_activated; // Neukládají se změny během jednoho tiku
 vector<Deposit> copper_deposits_activated;
 vector<Deposit> oil_deposits_activated;
 vector<Deposit> all_deposits_activated;
+vector<Deposit> all_deposits_activated_with_changes;
 int ticks_passed = 0;
+int belt_edge_id = 0;
+int total_deposits_activated = 0;
+
+double iron_copper_constant = 1;
+string oil_priority = "mine"; // "craft" nebo "mine"
 
 bool lvl2_deposits_unlocked = 0;
 bool lvl1_deposit_build_from_base = 0;
@@ -302,6 +317,15 @@ bool lvl1_deposit_build_from_base = 0;
 void initValues(){
     all_deposits.insert(all_deposits.end(), COPPER_DEPOSITS.begin(), COPPER_DEPOSITS.end());
     all_deposits.insert(all_deposits.end(), OIL_DEPOSITS.begin(), OIL_DEPOSITS.end());
+
+    all_deposits_activated.reserve(200);
+    iron_deposits_activated.reserve(50);
+    copper_deposits_activated.reserve(50);
+    oil_deposits_activated.reserve(50);
+    all_deposits_activated_with_changes.reserve(200);
+
+    if(debug) lvl1_deposit_build_from_base = true;
+    if(debug) lvl2_deposits_unlocked = true;
 }
 
 // Pomocné funkce
@@ -316,7 +340,7 @@ bool equals(string s, string t){
     return 1;
 }
 
-bool are_distinct_points(int i, int j){
+bool areDistinctPoints(int i, int j){
     if(1 <= i && i <= points.size() && 1 <= j && j <= points.size() && i != j) return 1;
     else return 0;
 }
@@ -341,7 +365,7 @@ void buildTrain(int v1, int v2){
 
     cout << "Chcete pokračovat? (Y|n)?" << endl;
     string answer;
-    cin >> answer;
+    getline(cin, answer);
 
     if(equals(answer, "Y")){
         team_stored.subtract(cost);
@@ -364,10 +388,12 @@ void buildBelt(int from, int to){
         int x = dfs.back();
         dfs.pop_back();
 
-        for(int vert_to: belt_graph[x]){
-            if(!vis[vert_to]){
-                vis[vert_to] = 1;
-                dfs.push_back(vert_to);
+        for(pair<int, int> vert_to: belt_graph[x]){
+            if(vert_to.first >= 0){
+                if(!vis[vert_to.first]){
+                    vis[vert_to.first] = 1;
+                    dfs.push_back(vert_to.first);
+                }
             }
         }
     }
@@ -390,12 +416,14 @@ void buildBelt(int from, int to){
 
     cout << "Chcete pokračovat? (Y|n)?" << endl;
     string answer;
-    cin >> answer;
+    getline(cin, answer);
 
     if(equals(answer, "Y")){
         team_stored.subtract(cost);
+        belt_edge_id++;
 
-        belt_graph[from - 1].push_back(to - 1);
+        belt_graph[from - 1].push_back({to - 1, belt_edge_id});
+        belt_graph[to - 1].push_back({from - 1 - points.size(), belt_edge_id});
         cout << "Pás úspěšně postaven." << endl;
     }
 }
@@ -413,7 +441,7 @@ void buildPipe(int v1, int v2){
 
     cout << "Chcete pokračovat? (Y|n)?" << endl;
     string answer;
-    cin >> answer;
+    getline(cin, answer);
 
     if(equals(answer, "Y")){
         team_stored.subtract(cost);
@@ -438,12 +466,357 @@ bool activateDeposit(Deposit deposit){
     }
 
     team_stored.subtract(cost);
-
     if(deposit.type == 'i') iron_deposits_activated.push_back(deposit);
     if(deposit.type == 'c') copper_deposits_activated.push_back(deposit);
     if(deposit.type == 'o') oil_deposits_activated.push_back(deposit);
     all_deposits_activated.push_back(deposit);
+    all_deposits_activated_with_changes.push_back(deposit);
+    indices_in_all_deposits_by_index[deposit.i] = total_deposits_activated;
+    total_deposits_activated++;
     return 1;
+}
+
+Resources<double> produceFromBelts(){
+    Resources<double> belt_prod = Resources(zero_vector);
+
+    map<int, queue<int> > edges;
+    for(int i = 0; i<points.size(); i++){
+        for(pair<int, int> to: belt_graph[i]){
+            edges[to.second] = {};
+        }
+    }
+
+    int NUM_ITER = 1000;
+    int cnt_at_base[points.size()];
+    fill(cnt_at_base, cnt_at_base + points.size(), 0);
+
+    for(int i = 0; i<NUM_ITER; i++){
+        for(int j = 0; j<points.size(); j++){
+            vector<pair<int, int> > ingoing_res;
+            vector<int> outgoing_edg;
+
+            for(pair<int, int> to: belt_graph[j]){
+                if(to.first >= 0 && edges[to.second].size() < 50) outgoing_edg.push_back(to.second);
+                if(to.first < 0 && !edges[to.second].empty())
+                 ingoing_res.push_back(make_pair(to.second, edges[to.second].front()));
+            }
+
+            if(indices_in_all_deposits_by_index.count(j + 1)){
+                for(int k = 0; k<floor(min(all_deposits_activated_with_changes[indices_in_all_deposits_by_index[j + 1]].speed,
+                 all_deposits_activated_with_changes[indices_in_all_deposits_by_index[j + 1]].capacity)); k++){
+                    ingoing_res.push_back(make_pair(-1, j));
+                }
+            }
+
+            while(ingoing_res.size() && (outgoing_edg.size() || j == 0)){
+                int rand_res = rand() % ingoing_res.size();
+                int rand_edg;
+                int edg;
+
+                if(j != 0) rand_edg = rand() % outgoing_edg.size();
+
+                pair<int, int> res = ingoing_res[rand_res];
+                int sz = ingoing_res.size();
+                if(j == 0 && ingoing_res.size() == 2){
+                    //cout << "os " << res.second << " " << outgoing_edg.size() << endl;
+                }
+                //cout << j << " " << res.second << endl;
+                if(j != 0) edg = outgoing_edg[rand_edg];
+                if(j == 0) cnt_at_base[res.second]++;
+
+                ingoing_res.erase(ingoing_res.begin() + rand_res);
+                if(j != 0) outgoing_edg.erase(outgoing_edg.begin() + rand_edg);
+
+                if(sz == 2 && j == 0){
+                    //cout << "sizes " << ingoing_res.size() << " " << outgoing_edg.size() << endl;
+                }
+
+                if(j != 0) edges[edg].push(res.second);
+                if(res.first != -1){
+                    edges[res.first].pop();
+                }
+            }
+
+            ingoing_res.clear();
+            outgoing_edg.clear();
+        }
+    }
+
+    edges.clear();
+
+    for(int i = 0; i<points.size(); i++){
+        if(cnt_at_base[i] != 0){
+            all_deposits_activated_with_changes[indices_in_all_deposits_by_index[i + 1]].capacity -= (double)cnt_at_base[i] / NUM_ITER;
+            all_deposits_activated_with_changes[indices_in_all_deposits_by_index[i + 1]].speed -= (double)cnt_at_base[i] / NUM_ITER;
+            if(all_deposits_activated_with_changes[indices_in_all_deposits_by_index[i + 1]].type == 'i') belt_prod.add(Resources<double>({{0, (double)cnt_at_base[i] / NUM_ITER}}));
+            if(all_deposits_activated_with_changes[indices_in_all_deposits_by_index[i + 1]].type == 'c') belt_prod.add(Resources<double>({{1, (double)cnt_at_base[i] / NUM_ITER}}));
+        }
+    }
+
+    return belt_prod;
+}
+
+// min cost max flow
+
+const int INF = 1000*1000*1000;
+
+struct rib {
+	int b;
+	double u, c, f; // Hrana u a, b - to, u - kapacita, c - cost, f - tok
+	size_t back;
+};
+
+void add_rib (vector < vector<rib> > & g, int a, int b, double u, double c) {
+	rib r1 = { b, u, c, 0, g[b].size() };
+	rib r2 = { a, 0, -c, 0, g[a].size() };
+	g[a].push_back (r1);
+	g[b].push_back (r2);
+}
+
+pair<double, double> minCostMaxFlow(int k, int s, int t, vector< vector<rib> > &g){
+	int n = g.size();
+	double flow = 0;
+	double cost = 0;
+	while (flow < k) {
+		vector<int> id (n, 0);
+		vector<int> d (n, INF);
+		vector<int> q (n);
+		vector<int> p (n);
+		vector<size_t> p_rib (n);
+		int qh=0, qt=0;
+		q[qt++] = s;
+		d[s] = 0;
+		while (qh != qt) {
+			int v = q[qh++];
+			id[v] = 2;
+			if (qh == n)  qh = 0;
+			for (size_t i=0; i<g[v].size(); ++i) {
+				rib & r = g[v][i];
+				if (r.f < r.u && d[v] + r.c < d[r.b]) {
+					d[r.b] = d[v] + r.c;
+					if (id[r.b] == 0) {
+						q[qt++] = r.b;
+						if (qt == n)  qt = 0;
+					}
+					else if (id[r.b] == 2) {
+						if (--qh == -1)  qh = n-1;
+						q[qh] = r.b;
+					}
+					id[r.b] = 1;
+					p[r.b] = v;
+					p_rib[r.b] = i;
+				}
+			}
+		}
+		if (d[t] == INF)  break;
+		double addflow = k - flow;
+		for (int v=t; v!=s; v=p[v]) {
+			int pv = p[v];  size_t pr = p_rib[v];
+			addflow = min (addflow, g[pv][pr].u - g[pv][pr].f);
+		}
+		for (int v=t; v!=s; v=p[v]) {
+			int pv = p[v];  size_t pr = p_rib[v],  r = g[pv][pr].back;
+			g[pv][pr].f += addflow;
+			g[v][r].f -= addflow;
+			cost += g[pv][pr].c * addflow;
+		}
+		flow += addflow;
+    }
+    /*
+    for(int i = 0; i<g.size(); i++){
+        for(rib j: g[i]){
+            cout << i << " " << j.b << " " << j.u << " " << j.c << " " << j.f << endl;
+        }
+    }
+    */
+
+    return make_pair(flow, cost);
+}
+
+vector<vector<int> > findPipeComponents(){
+    vector<vector<int> > comps;
+    vector<int> dfs;
+    int vis[points.size()];
+    fill(vis, vis + points.size(), 0);
+
+    for(int i = 0; i<points.size(); i++){
+        if(!vis[i]){
+            vector<int> comp;
+            vis[i] = 1;
+            dfs.push_back(i);
+            comp.push_back(i);
+
+            while(!dfs.empty()){
+                int x = dfs.back();
+                dfs.pop_back();
+                for(int to: pipe_graph[x]){
+                    if(!vis[to]){
+                        vis[to] = 1;
+                        dfs.push_back(to);
+                        comp.push_back(to);
+                    }
+                }
+            }
+
+            comps.push_back(comp);
+        }
+    }
+
+    return comps;
+}
+
+Resources<double> produceFromTrains(){
+    vector<vector<int> > pipe_comps = findPipeComponents();
+    vector<vector<pair<pair<pair<double, double>, pair<double, double> >, int> > > pipe_comps_detailed;
+
+    vector<vector<rib> > g(points.size() + 1 + pipe_comps.size());
+    for(int i = 0; i<points.size(); i++){
+        for(int to: train_graph[i]){
+            add_rib(g, i, to, TRAIN_CAPACITY, 0);
+        }
+    }
+
+    for(int i = 0; i<pipe_comps.size(); i++){
+        vector<int> pipe_comp = pipe_comps[i];
+
+        vector<pair<pair<pair<double, double>, pair<double, double> >, int> > pipe_comp_detailed;
+        double total_oil_speed = 0;
+
+        // oil cap, oil speed, other cap, other speed, index
+
+        for(int index: pipe_comp){
+            if(indices_in_all_deposits_by_index.count(index + 1)){
+                if(all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].type == 'o'){
+                     pipe_comp_detailed.push_back({{{
+                     all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].capacity,
+                     min(all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].capacity,
+                     all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].speed)}, {0, 0}}, index});
+
+                     total_oil_speed += min(all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].capacity,
+                     all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].speed);
+                }
+
+                else{
+                     pipe_comp_detailed.push_back({{{0, 0}, {
+                     all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].capacity,
+                     min(all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].capacity,
+                     all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].speed)}}, index});
+
+                     if(all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].type == 'i'){
+                         add_rib(g, points.size() + i + 1, index, min(all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].capacity,
+                         all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].speed),
+                         iron_copper_constant / all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].capacity);
+                     }
+
+                     else{
+                         add_rib(g, points.size() + i + 1, index, min(all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].capacity,
+                         all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].speed),
+                         1/ (iron_copper_constant * all_deposits_activated_with_changes[indices_in_all_deposits_by_index[index + 1]].capacity));
+                     }
+                }
+            }
+
+            else pipe_comp_detailed.push_back({{{0, 0}, {0, 0}}, index});
+        }
+
+        sort(pipe_comp_detailed.begin(), pipe_comp_detailed.end());
+        reverse(pipe_comp_detailed.begin(), pipe_comp_detailed.end());
+
+        pipe_comps_detailed.push_back(pipe_comp_detailed);
+
+        add_rib(g, points.size(), points.size() + i + 1, total_oil_speed, 0);
+    }
+
+    pair<double, double> max_flow_result;
+    max_flow_result = minCostMaxFlow(INF, points.size(), 0, g);
+    double flow, cost;
+    flow = max_flow_result.first;
+    cost = max_flow_result.second;
+    //cout << flow << endl;
+
+    double train_iron_production = 0;
+    double train_copper_production = 0;
+
+    for(int j = 0; j<pipe_comps.size(); j++){
+        vector<int> pipe_comp = pipe_comps[j];
+        vector<pair<pair<pair<double, double>, pair<double, double> >, int> > pipe_comp_detailed = pipe_comps_detailed[j];
+
+        double iron_production = 0;
+        double copper_production = 0;
+
+        for(int i: pipe_comp){
+            for(rib edge: g[i]){
+                if(edge.b > points.size()){
+                    all_deposits_activated_with_changes[indices_in_all_deposits_by_index[i + 1]].capacity -= -edge.f;
+                    all_deposits_activated_with_changes[indices_in_all_deposits_by_index[i + 1]].speed -= -edge.f;
+
+                    if(all_deposits_activated_with_changes[indices_in_all_deposits_by_index[i + 1]].type == 'i'){
+                        iron_production += -edge.f;
+                    }
+
+                    else{
+                        copper_production += -edge.f;
+                    }
+                }
+            }
+        }
+
+        double total_needed_oil = iron_production + copper_production;
+
+        for(auto vert: pipe_comp_detailed){
+            double cur_used_oil;
+            if(indices_in_all_deposits_by_index.count(vert.second + 1)){
+                cur_used_oil = min(min(vert.first.first.first, vert.first.first.second), total_needed_oil);
+            }
+
+            else cur_used_oil = 0;
+
+            if(cur_used_oil > 0){
+                all_deposits_activated_with_changes[indices_in_all_deposits_by_index[vert.second + 1]].capacity -= cur_used_oil;
+                all_deposits_activated_with_changes[indices_in_all_deposits_by_index[vert.second + 1]].speed -= cur_used_oil;
+                total_needed_oil -= cur_used_oil;
+            }
+        }
+
+        if(total_needed_oil > 0) cout << "BUG" << endl;
+
+        train_iron_production += iron_production;
+        train_copper_production += copper_production;
+    }
+
+    //cout << train_iron_production << " " << train_copper_production << endl;
+    // if(flow > 0) cout << std::fixed << std::setprecision(10) << flow << " " << cost << endl;
+    Resources<double> train_prod = Resources<double>({{0, train_iron_production}, {1, train_copper_production}});
+    return train_prod;
+}
+
+Resources<double> produceFromCrafting(){
+    Resources<double> craft_prod = Resources(zero_vector);
+
+    return craft_prod;
+}
+
+void updateCapacities(){
+    for(auto &index_deposit: indices_in_all_deposits_by_index){
+        for(Deposit &deposit: iron_deposits_activated){
+            if(deposit.i == index_deposit.first) deposit.capacity = all_deposits_activated_with_changes[index_deposit.second].capacity;
+        }
+
+        for(Deposit &deposit: copper_deposits_activated){
+            if(deposit.i == index_deposit.first) deposit.capacity = all_deposits_activated_with_changes[index_deposit.second].capacity;
+        }
+
+        for(Deposit &deposit: oil_deposits_activated){
+            if(deposit.i == index_deposit.first) deposit.capacity = all_deposits_activated_with_changes[index_deposit.second].capacity;
+        }
+
+        for(Deposit &deposit: all_deposits_activated){
+            if(deposit.i == index_deposit.first){
+                deposit.capacity = all_deposits_activated_with_changes[index_deposit.second].capacity;
+                all_deposits_activated_with_changes[index_deposit.second].speed = deposit.speed;
+            }
+        }
+    }
 }
 
 vector<string> tokenise(string user_input){
@@ -460,6 +833,59 @@ vector<string> tokenise(string user_input){
     }
 
     return tokens;
+}
+
+// main funkce
+
+void doMainStuff(){
+    ticks_passed++;
+
+    if(debug){
+        //cout << "ONE_TICK" << endl;
+    }
+
+    Resources<double> team_cur_production = Resources(zero_vector);
+    team_cur_production.add(team_basic_production);
+
+    /*
+    for(Deposit deposit: all_deposits_activated){
+        indices_in_all_deposits_by_index[deposit.i] = &deposit;
+    }
+    */
+
+    prod_from_belts = produceFromBelts();
+    team_cur_production.add(prod_from_belts);
+
+    if(oil_priority == "mine"){
+        prod_from_trains = produceFromTrains();
+        prod_from_craft = produceFromCrafting();
+    }
+
+    if(oil_priority == "craft"){
+        prod_from_trains = produceFromTrains();
+        prod_from_craft = produceFromCrafting();
+    }
+
+    //prod_from_belts.print(1);
+    //prod_from_trains.print(1);
+
+    team_cur_production.add(prod_from_trains);
+    team_cur_production.add(prod_from_craft);
+
+    team_production = team_cur_production;
+    team_stored.add(team_production);
+
+    updateCapacities();
+}
+
+void* doStuffForSomeTime(void* t){
+    for(int i = 0; i<*static_cast<int*>(t); i++){
+        doMainStuff();
+        if(i % 60 == 0){
+            cout << "Skipnuta jedna minuta" << endl;
+        }
+    }
+    pthread_exit(NULL);
 }
 
 // Nesahat na mulithreding, pokud nevíte, co děláte, jinak se to rozbije.
@@ -480,7 +906,9 @@ void *readInput(void* input){
             continue;
         }
         //cout << command << endl;
+        if(user_input == command) user_input.clear();
         user_input.erase(0, user_input.find(' ') + 1);
+
 
         //cout << "KENCR" << endl;
         if(equals(command, "belt")){
@@ -503,7 +931,7 @@ void *readInput(void* input){
                 continue;
             }
 
-            if(are_distinct_points(from, to)) buildBelt(from, to);
+            if(areDistinctPoints(from, to)) buildBelt(from, to);
             else{
                 cout << "Špatně zadaná čísla bodů." << endl;
                 continue;
@@ -530,7 +958,7 @@ void *readInput(void* input){
                 continue;
             }
 
-            if(are_distinct_points(v1, v2)) buildTrain(v1, v2);
+            if(areDistinctPoints(v1, v2)) buildTrain(v1, v2);
             else{
                 cout << "Špatně zadaná čísla bodů." << endl;
                 continue;
@@ -557,7 +985,7 @@ void *readInput(void* input){
                 continue;
             }
 
-            if(are_distinct_points(v1, v2)) buildPipe(v1, v2);
+            if(areDistinctPoints(v1, v2)) buildPipe(v1, v2);
             else{
                 cout << "Špatně zadaná čísla bodů." << endl;
                 continue;
@@ -570,8 +998,68 @@ void *readInput(void* input){
         }
 
         if(equals(command, "prod")){
-            cout << "Produkce přicházející na základnu:" << endl;
-            team_production.print(0);
+            vector<string> tokens = tokenise(user_input);
+
+            if(tokens.size() > 1){
+                cout << "Neplatný vstup" << endl;
+                continue;
+            }
+
+            if(tokens.size() == 0){
+                cout << "Produkce přicházející na základnu:" << endl;
+                team_production.print(1);
+                continue;
+            }
+
+            string token = tokens[0];
+            if(equals(token, "belt")){
+                cout << "Produkce přicházející na základnu z pásů:" << endl;
+                prod_from_belts.print(1);
+                continue;
+            }
+
+            else if(equals(token, "train")){
+                cout << "Produkce přicházející na základnu z vlaků:" << endl;
+                prod_from_trains.print(1);
+                continue;
+            }
+
+            else if(equals(token, "craft")){
+                cout << "Produkce přicházející na základnu z craftění:" << endl;
+                prod_from_craft.print(1);
+                continue;
+            }
+
+            else{
+                cout << "Neplatný vstup" << endl;
+                continue;
+            }
+        }
+
+        if(equals(command, "depo")){
+            cout << "Aktivovaná ložiska železa: ";
+            for(Deposit deposit: iron_deposits_activated){
+                cout << deposit.i << " ";
+            }
+            cout << endl;
+
+            cout << "Aktivovaná ložiska měďi: ";
+            for(Deposit deposit: copper_deposits_activated){
+                cout << deposit.i << " ";
+            }
+            cout << endl;
+
+            cout << "Aktivovaná ložiska ropy: ";
+            for(Deposit deposit: oil_deposits_activated){
+                cout << deposit.i << " ";
+            }
+            cout << endl;
+
+            cout << "Všechna aktivovaná ložiska: ";
+            for(Deposit deposit: all_deposits_activated){
+                cout << deposit.i << " ";
+            }
+            cout << endl;
         }
 
         if(equals(command, "skip")){
@@ -596,12 +1084,12 @@ void *readInput(void* input){
                 continue;
             }
 
-            for(int i = 0; i<t; i++){
-                team_stored.add(team_production);
-            }
+            int rc;
+            pthread_t skip_thread;
+            rc = pthread_create(&skip_thread, NULL, doStuffForSomeTime, &t);
         }
 
-        cout << command << "   " << user_input << endl;
+        //cout << command << "   " << user_input << endl;
 
         if(equals(command, "mine")){
             vector<string> tokens = tokenise(user_input);
@@ -677,12 +1165,59 @@ void *readInput(void* input){
             }
         }
 
+        if(equals(command, "ratio")){
+            vector<string> tokens = tokenise(user_input);
+            if(tokens.size() != 1){
+                cout << "Neplatný vstup" << endl;
+                continue;
+            }
+
+            string token = tokens[0];
+
+            double iron_copper_new_constant;
+            try{
+                iron_copper_new_constant = stod(token);
+            }
+
+            catch(...){
+                cout << "Neplatný vstup." << endl;
+                continue;
+            }
+
+            if(iron_copper_new_constant < 1e6 && iron_copper_new_constant > 0.000001){
+                iron_copper_constant = iron_copper_new_constant;
+                cout << "Konstanta úspěšně změněna." << endl;
+            }
+
+            else{
+                cout << "Konstanta musí být mezi 0.000001 a 1000000" << endl;
+                continue;
+            }
+        }
+
+        if(equals(command, "oil")){
+            vector<string> tokens = tokenise(user_input);
+            if(tokens.size() != 1){
+                cout << "Neplatný vstup" << endl;
+                continue;
+            }
+
+            string token = tokens[0];
+            if(token == "mine" || token == "craft"){
+                oil_priority = token;
+                cout << "Prioritní využití ropy změněno." << endl;
+            }
+
+            else cout << "Neplatný vstup" << endl;
+        }
+
     }
     pthread_exit(NULL);
 }
 
 int main(){
     cout << "Hra začíná. Za celé politbyro vám přeji hodně štěstí." << endl;
+    srand(time(NULL));
 
     // Nesahat, jinak se to rozbije.
     chrono::milliseconds timespan(1000);
@@ -695,16 +1230,6 @@ int main(){
     while(1){
         // Jeden tik je jedna vteřina.
         this_thread::sleep_for(timespan);
-        ticks_passed++;
-
-        if(debug){
-            //cout << "ONE_TICK" << endl;
-        }
-
-        team_production = Resources(prod_i);
-        team_production.add(team_basic_production);
-
-
-        team_stored.add(team_production);
+        doMainStuff();
     }
 }
