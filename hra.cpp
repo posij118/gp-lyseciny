@@ -14,7 +14,7 @@
 using namespace std;
 
 // Debug musí být false.
-bool debug = true;
+bool debug = false;
 
 // Playtest musí být false.
 bool playtest = true;
@@ -304,6 +304,17 @@ double ROCKET_FUEL_STATION_IRON_COST = 3000;
 double ROCKET_FUEL_STATION_COPPER_COST = 6000;
 double ROCKET_FUEL_STATION_PLASTIC_COST = 1500;
 
+double CRAFTING_UNLOCK_IRON_COST = 5000;
+double CRAFTING_UNLOCK_COPPER_COST = 5000;
+
+double FROM_BASE_UNLOCK_IRON_COST = 50000;
+double FROM_BASE_UNLOCK_COPPER_COST = 50000;
+double LVL2_UNLOCK_IRON_COST = 50000;
+double LVL2_UNLOCK_COPPER_COST = 50000;
+double LVL2_UNLOCK_MACHINES_COST = 5000;
+double LVL2_UNLOCK_CIRCUITS_COST = 5000;
+double LVL2_UNLOCK_PLASTIC_COST = 2000;
+
 int SHORT_TIME_WARP = 2400;
 int LONG_TIME_WARP = 7200;
 
@@ -350,7 +361,7 @@ vector<Deposit> OIL_DEPOSITS = {
     Deposit('o', "lae", 1000000, 90, 2, 37)
 };
 
-set<string> commands = {"mine", "belt", "train", "pipe", "make", "build", "stored", "depo", "skip", "prod", "ratio", "all", "hint"};
+set<string> commands = {"mine", "belt", "train", "pipe", "make", "build", "stored", "skip", "prod", "ratio", "all", "hint", "unlock"};
 vector<string> station_names = {"mach", "circ", "plas", "rock", "boos", "fuel"};
 
 // Inicializace objektů surovin
@@ -375,6 +386,8 @@ vector<pair<int, double> > copper_deposit_2_i = {{0, COPPER_DEPOSIT_2_IRON_COST}
 Resources<double> copper_deposit_2_cost = Resources(copper_deposit_2_i);
 vector<pair<int, double> > oil_deposit_2_i = {{0, OIL_DEPOSIT_2_IRON_COST}, {1, OIL_DEPOSIT_2_COPPER_COST}};
 Resources<double> oil_deposit_2_cost = Resources(oil_deposit_2_i);
+vector<pair<int, double> > to_win_i = {{6, 1}, {7, 2}};
+Resources<double> to_win = Resources(to_win_i);
 
 vector<pair<int, double> > machines_craft_in_i = {{0, MACHINES_CRAFT_IRON_COST}, {1, MACHINES_CRAFT_COPPER_COST}, {2, MACHINES_CRAFT_OIL_COST}, {9, MACHINES_CRAFT_TIME}};
 vector<pair<int, double> > circuits_craft_in_i = {{0, CIRCUITS_CRAFT_IRON_COST}, {1, CIRCUITS_CRAFT_COPPER_COST}, {2, CIRCUITS_CRAFT_OIL_COST}, {9, CIRCUITS_CRAFT_TIME}};
@@ -382,6 +395,13 @@ vector<pair<int, double> > plastic_craft_in_i = {{0, PLASTIC_CRAFT_IRON_COST}, {
 vector<pair<int, double> > rocket_craft_in_i = {{0, ROCKET_CRAFT_IRON_COST}, {1, ROCKET_CRAFT_COPPER_COST}, {2, ROCKET_CRAFT_OIL_COST}, {3, ROCKET_CRAFT_MACHINES_COST}, {4, ROCKET_CRAFT_CIRCUITS_COST}, {5, ROCKET_CRAFT_PLASTIC_COST}, {8, ROCKET_CRAFT_ROCKET_FUEL_COST}, {9, ROCKET_CRAFT_TIME}};
 vector<pair<int, double> > booster_craft_in_i = {{0, BOOSTER_CRAFT_IRON_COST}, {1, BOOSTER_CRAFT_COPPER_COST}, {2, BOOSTER_CRAFT_OIL_COST}, {3, BOOSTER_CRAFT_MACHINES_COST}, {4, BOOSTER_CRAFT_CIRCUITS_COST}, {5, BOOSTER_CRAFT_PLASTIC_COST}, {8, BOOSTER_CRAFT_ROCKET_FUEL_COST}, {9, BOOSTER_CRAFT_TIME}};
 vector<pair<int, double> > rocket_fuel_craft_in_i = {{2, ROCKET_FUEL_CRAFT_OIL_COST}, {9, ROCKET_FUEL_CRAFT_TIME}};
+
+vector<pair<int, double> > craft_unlock_i = {{0, CRAFTING_UNLOCK_IRON_COST}, {1, CRAFTING_UNLOCK_COPPER_COST}};
+Resources<double> craft_unlock_cost = Resources(craft_unlock_i);
+vector<pair<int, double> > from_base_unlock_i = {{0, FROM_BASE_UNLOCK_IRON_COST}, {1, FROM_BASE_UNLOCK_COPPER_COST}};
+Resources<double> from_base_unlock_cost = Resources(from_base_unlock_i);
+vector<pair<int, double> > lvl2_unlock_i = {{0, LVL2_UNLOCK_IRON_COST}, {1, LVL2_UNLOCK_COPPER_COST}, {3, LVL2_UNLOCK_MACHINES_COST}, {4, LVL2_UNLOCK_CIRCUITS_COST}, {5, LVL2_UNLOCK_PLASTIC_COST}};
+Resources<double> lvl2_unlock_cost = Resources(lvl2_unlock_i);
 
 // Pomocné proměnné
 
@@ -1081,6 +1101,11 @@ void doMainStuff(){
     team_average_production = team_cur_average_production;
 
     team_stored.add(team_production);
+    if(!team_stored.less_than(to_win)){
+        cout << "Gratulujeme, postavili jste raketu a vyhráli jste tuto hru." << endl;
+        cout << "Trvalo vám to přesně " << ticks_passed << " sekund." << endl;
+        cout << "Politbyro vám tímto nařizuje jít spát." << endl;
+    }
 
     updateCapacities();
 }
@@ -1310,6 +1335,33 @@ void *readInput(void* input){
                     cout << ciph.first.first << " ";
                 }
                 cout << endl;
+            }
+
+            else if(equals(token, "belt")){
+                cout << "Máte postaveny tyto pásy (od-do):" << endl;
+                for(int i = 0; i<points.size(); i++){
+                    for(auto j: belt_graph[i]){
+                        if(j.first >= 0) cout << i + 1 << " " << j.first + 1 << endl;
+                    }
+                }
+            }
+
+            else if(equals(token, "train")){
+                cout << "Máte postaveny tyto vlaky (mezi body):" << endl;
+                for(int i = 0; i<points.size(); i++){
+                    for(int j: train_graph[i]){
+                        if(i < j) cout << i + 1 << " " << j + 1 << endl;
+                    }
+                }
+            }
+
+            else if(equals(token, "pipe")){
+                cout << "Máte postaveny tyto trubky (mezi body):" << endl;
+                for(int i = 0; i<points.size(); i++){
+                    for(int j: pipe_graph[i]){
+                        if(i < j) cout << i + 1 << " " << j + 1 << endl;
+                    }
+                }
             }
 
             else{
@@ -1549,20 +1601,91 @@ void *readInput(void* input){
             if(!hinted) cout << "Špatně zadané číslo šifry, může být ještě vám skrytá, nebo je už vyřešená" << endl;
         }
 
+        if(equals(command, "unlock")){
+            vector<string> tokens = tokenise(user_input);
+            if(tokens.size() != 1){
+                cout << "Neplatný vstup" << endl;
+                continue;
+            }
+
+            string token = tokens[0];
+
+            if(equals(token, "craft")){
+                if(crafting_unlocked){
+                    cout << "Craftění už máte odemčeno." << endl;
+                    continue;
+                }
+
+                if(!debug && team_stored.less_than(craft_unlock_cost)){
+                    cout << "Na odemknutí nemáte dostatek surovin." << endl;
+                    continue;
+                }
+
+                team_stored.subtract(craft_unlock_cost);
+                crafting_unlocked = 1;
+                cout << "Craftění odemčeno." << endl;
+            }
+
+            else if(equals(token, "moskva")){
+                if(lvl1_deposit_build_from_base){
+                    cout << "Těžbu ze základny už máte odemčenou." << endl;
+                    continue;
+                }
+
+                if(!debug && team_stored.less_than(from_base_unlock_cost)){
+                    cout << "Na odemknutí nemáte dostatek surovin." << endl;
+                    continue;
+                }
+
+                team_stored.subtract(from_base_unlock_cost);
+                left_level = 3;
+                lvl1_deposit_build_from_base = 1;
+                cout << "Těžba ze základny odemčena." << endl;
+            }
+
+            else if(equals(token, "lvl2")){
+                if(lvl2_deposits_unlocked){
+                    cout << "Pokročilá ložiska už máte odemčena." << endl;
+                    continue;
+                }
+
+                if(!lvl1_deposit_build_from_base){
+                    cout << "Ještě nemáte odemčenou těžbu ze základny" << endl;
+                    continue;
+                }
+
+                if(!debug && team_stored.less_than(lvl2_unlock_cost)){
+                    cout << "Na odemknutí nemáte dostatek surovin." << endl;
+                    continue;
+                }
+
+                team_stored.subtract(lvl2_unlock_cost);
+                left_level = 4;
+                lvl2_deposits_unlocked = 1;
+                cout << "Těžba ze základny odemčena." << endl;
+            }
+
+            else{
+                cout << "Neplatný vstup" << endl;
+            }
+        }
+
         for(int i = active_ciphers.size() - 1; i>=0; i--){
             if(equals(command, active_ciphers[i].first.second) && !active_ciphers[i].second.second){
                 string improvement_command;
-                active_ciphers.erase(active_ciphers.begin() + i);
 
                 while(1){
                     cout << "Gratulace. Úspěšně jste vyřešili šifru. Nyní si vyberte bonus." << endl;
                     cout << "Na výběr máte:" << endl;
-                    cout << "Plus jeden level na obou stromech - kód lvl." << endl;
-                    cout << "Maximální level na stromu napravo a kratší timewarp - kód ciph." << endl;
+                    if(left_level < 4 || right_level < 2) cout << "Plus jeden level na obou stromech - kód lvl." << endl;
+                    if(right_level < 2) cout << "Maximální level na stromu napravo a kratší timewarp - kód ciph." << endl;
                     cout << "Delší timewarp - kód tw." << endl;
+                    cout << "Nechat si bonus na jindy - kód back." << endl;
 
                     getline(cin, improvement_command);
-                    if(equals(improvement_command, "lvl")){
+                    if(equals(improvement_command, "lvl") && (left_level < 4 || right_level < 2)){
+                        active_ciphers.erase(active_ciphers.begin() + i);
+                        commands.erase(tolower(command));
                         left_level++;
                         right_level++;
 
@@ -1572,6 +1695,7 @@ void *readInput(void* input){
                             cout << "Další šifry jsou na lokacích: ";
                             for(auto cipher: lvl2_ciphers){
                                 active_ciphers.push_back({cipher, {2, 0}});
+                                commands.insert(tolower(cipher.second));
                                 cout << cipher.first << " ";
                             }
                             cout << endl;
@@ -1580,6 +1704,7 @@ void *readInput(void* input){
                             cout << "Další šifry jsou na lokacích: ";
                             for(auto cipher: lvl3_ciphers){
                                 active_ciphers.push_back({cipher, {3, 0}});
+                                commands.insert(tolower(cipher.second));
                                 cout << cipher.first << " ";
                             }
                             cout << endl;
@@ -1589,11 +1714,15 @@ void *readInput(void* input){
                         break;
                     }
 
-                    else if(equals(improvement_command, "ciph")){
+                    else if(equals(improvement_command, "ciph") && right_level < 2){
+                        active_ciphers.erase(active_ciphers.begin() + i);
+                        commands.erase(tolower(command));
+
                         if(right_level == 0){
                             cout << "Další šifry jsou na lokacích: ";
                             for(auto cipher: lvl2_ciphers){
                                 active_ciphers.push_back({cipher, {2, 0}});
+                                commands.insert(tolower(cipher.second));
                                 cout << cipher.first << " ";
                             }
                             cout << endl;
@@ -1601,6 +1730,7 @@ void *readInput(void* input){
                             cout << "Další šifry jsou na lokacích: ";
                             for(auto cipher: lvl3_ciphers){
                                 active_ciphers.push_back({cipher, {3, 0}});
+                                commands.insert(tolower(cipher.second));
                                 cout << cipher.first << " ";
                             }
                             cout << endl;
@@ -1610,6 +1740,7 @@ void *readInput(void* input){
                             cout << "Další šifry jsou na lokacích: ";
                             for(auto cipher: lvl3_ciphers){
                                 active_ciphers.push_back({cipher, {3, 0}});
+                                commands.insert(tolower(cipher.second));
                                 cout << cipher.first << " ";
                             }
                             cout << endl;
@@ -1627,11 +1758,17 @@ void *readInput(void* input){
                     }
 
                     else if(equals(improvement_command, "tw")){
-                        for(int i = 0; i<SHORT_TIME_WARP; i++){
+                        active_ciphers.erase(active_ciphers.begin() + i);
+                        commands.erase(tolower(command));
+                        for(int i = 0; i<LONG_TIME_WARP; i++){
                             doMainStuff();
                         }
 
                         cout << "Time warp úspěšně dokončen." << endl;
+                        break;
+                    }
+
+                    else if(equals(improvement_command, "back")){
                         break;
                     }
 
@@ -1643,22 +1780,25 @@ void *readInput(void* input){
 
             else if(equals(command, active_ciphers[i].first.second)){
                 string improvement_command;
-                active_ciphers.erase(active_ciphers.begin() + i);
 
                 while(1){
                     cout << "Gratulace. Úspěšně jste vyřešili šifru s hintem. Nyní si vyberte bonus." << endl;
                     cout << "Na výběr máte:" << endl;
-                    cout << "Plus jeden level na stromu napravo - kód ciph." << endl;
-                    cout << "Odemknutí craftění - kód craft." << endl;
+                    if(!lvl3_ciphers_unlocked) cout << "Plus jeden level na stromu napravo - kód ciph." << endl;
+                    if(!crafting_unlocked) cout << "Odemknutí craftění - kód craft." << endl;
                     cout << "Kratší timewarp - kód tw." << endl;
+                    cout << "Nechat si bonus na jindy - kód back." << endl;
 
                     getline(cin, improvement_command);
 
-                    if(equals(improvement_command, "ciph")){
+                    if(equals(improvement_command, "ciph") && !lvl3_ciphers_unlocked){
+                        active_ciphers.erase(active_ciphers.begin() + i);
+                        commands.erase(tolower(command));
                         if(right_level == 0){
                             cout << "Další šifry jsou na lokacích: ";
                             for(auto cipher: lvl2_ciphers){
                                 active_ciphers.push_back({cipher, {2, 0}});
+                                commands.insert(tolower(cipher.second));
                                 cout << cipher.first << " ";
                             }
                             cout << endl;
@@ -1668,6 +1808,7 @@ void *readInput(void* input){
                             cout << "Další šifry jsou na lokacích: ";
                             for(auto cipher: lvl3_ciphers){
                                 active_ciphers.push_back({cipher, {3, 0}});
+                                commands.insert(tolower(cipher.second));
                                 cout << cipher.first << " ";
                             }
                             cout << endl;
@@ -1680,6 +1821,8 @@ void *readInput(void* input){
                     }
 
                     else if(equals(improvement_command, "tw")){
+                        active_ciphers.erase(active_ciphers.begin() + i);
+                        commands.erase(tolower(command));
                         for(int i = 0; i<SHORT_TIME_WARP; i++){
                             doMainStuff();
                         }
@@ -1688,9 +1831,15 @@ void *readInput(void* input){
                         break;
                     }
 
-                    else if(equals(improvement_command, "craft")){
+                    else if(equals(improvement_command, "craft") && !crafting_unlocked){
+                        active_ciphers.erase(active_ciphers.begin() + i);
+                        commands.erase(tolower(command));
                         crafting_unlocked = 1;
                         cout << "Craftění odemčeno" << endl;
+                        break;
+                    }
+
+                    else if(equals(improvement_command, "back")){
                         break;
                     }
 
