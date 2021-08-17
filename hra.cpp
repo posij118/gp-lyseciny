@@ -16,8 +16,26 @@ using namespace std;
 // Debug musí být false.
 bool debug = true;
 
+// Playtest musí být false.
+bool playtest = true;
+
 // Sem patří obsah souboru input_body.txt.
 vector<vector<double> > points = {{50.71275919675827, 15.83528995513916}, {50.71362890303135, 15.834453105926514}, {50.71556478738785, 15.834753513336182}, {50.714654847979546, 15.83778977394104}, {50.71163132786751, 15.839388370513916}, {50.71519799530506, 15.840343236923218}, {50.717955976724625, 15.8352792263031}, {50.72011582553387, 15.835343599319458}, {50.71275249123573, 15.84302544593811}, {50.710062235593796, 15.846115350723267}, {50.709464102983475, 15.841695070266724}, {50.708458945155144, 15.848819017410278}, {50.707819908857346, 15.841180086135864}, {50.70869900286198, 15.833396315574646}, {50.70626690983772, 15.830671191215515}, {50.708671510219574, 15.836893916130066}, {50.70684157311916, 15.838622599840164}, {50.70456974208355, 15.837634205818176}, {50.70372752845287, 15.829394459724426}, {50.70880964398384, 15.824115872383118}, {50.71133695542812, 15.826948285102844}, {50.71190759539604, 15.823858380317688}, {50.71087494492531, 15.821455121040344}, {50.70886395871639, 15.821755528450012}, {50.71071200072765, 15.82930862903595}, {50.704787001013756, 15.825231671333313}, {50.70628233253956, 15.826776623725891}, {50.70397160947323, 15.821455121040344}, {50.706798657774925, 15.819781422615051}, {50.71024999022484, 15.830896496772766}, {50.703537091612816, 15.825360417366028}, {50.70212356746197, 15.827506184577942}, {50.70543944835663, 15.848663449287415}, {50.70484131574631, 15.846303105354309}, {50.713021382689476, 15.840466618537903}, {50.71005955338478, 15.820210576057434}, {50.705086067318916, 15.818536877632141}, {50.70622734725475, 15.841067433357239}, {50.70660822093487, 15.836346745491028}, {50.7031562179327, 15.837677121162415}, {50.70182450115681, 15.829866528511047}, {50.70889078080654, 15.8430415391922}, {50.70902690291405, 15.818365216255188}, {50.717939883470535, 15.838707089424133}, {50.711065381765366, 15.843170285224915}, {50.70707023143768, 15.823429226875305}, {50.70943459868431, 15.828450322151184}, {50.700872987508774, 15.831969380378723}, {50.70019371807575, 15.828106999397278}, {50.697910487651825, 15.830338597297668}};
+
+// Sem patří řešení a místa šifer:
+vector<pair<int, string> > lvl1_ciphers = {{1 ,"Prilis"}, {3, "Zlutoucky"}, {14, "Kun"}, {17, "Upel"}};
+vector<pair<int, string> > lvl2_ciphers = {{24, "Dabelske"}, {41, "Ody"}};
+vector<pair<int, string> > lvl3_ciphers = {{8, "Danilova"}, {26, "Mama"}};
+
+// Sem patří hinty k šifrám:
+map<int, string> hints = {{1, "Je to jasný!"},
+ {3, "Je to jasný!"},
+ {14, "Je to jasný!"},
+ {17, "Je to jasný!"},
+ {24, "Je to jasný!"},
+ {41, "Je to jasný!"},
+ {8, "Je to jasný!"},
+ {26, "Je to jasný!"}};
 
 class Deposit{
     public:
@@ -39,6 +57,8 @@ class Deposit{
             this -> i = i;
         }
 };
+
+vector<pair<int, double> > zero_vector = {{}};
 
 template <typename T> class Resources{
     public:
@@ -97,7 +117,9 @@ template <typename T> class Resources{
                     case 8:
                         this -> rocket_fuel = resource.second;
                         break;
-
+                    case 9:
+                        this -> time = resource.second;
+                        break;
                 }
             }
         }
@@ -175,9 +197,19 @@ template <typename T> class Resources{
         }
 };
 
+class CraftingStation{
+    public:
+        Resources<double> in = Resources<double>(zero_vector);
+        Resources<double> out = Resources<double>(zero_vector);
+        bool active = 0;
+        int tick_when_starts_producing = -1;
+        bool producing = 0;
+        string type;
+};
+
 // Parametry
-int INIT_IRON_STORED = 3000;
-int INIT_COPPER_STORED = 3000;
+int INIT_IRON_STORED = 5000;
+int INIT_COPPER_STORED = 5000;
 int INIT_OIL_STORED = 0;
 int COPPER_PRODUCTION = 1;
 int IRON_PRODUCTION = 1;
@@ -212,6 +244,68 @@ double COPPER_DEPOSIT_2_IRON_COST = 4000;
 double COPPER_DEPOSIT_2_COPPER_COST = 2000;
 double OIL_DEPOSIT_2_IRON_COST = 8000;
 double OIL_DEPOSIT_2_COPPER_COST = 6000;
+
+double MACHINES_CRAFT_IRON_COST = 5;
+double MACHINES_CRAFT_COPPER_COST = 1;
+double MACHINES_CRAFT_OIL_COST = 0;
+double MACHINES_CRAFT_TIME = 2;
+
+double CIRCUITS_CRAFT_IRON_COST = 1;
+double CIRCUITS_CRAFT_COPPER_COST = 5;
+double CIRCUITS_CRAFT_OIL_COST = 0;
+double CIRCUITS_CRAFT_TIME = 3;
+
+double PLASTIC_CRAFT_IRON_COST = 2;
+double PLASTIC_CRAFT_COPPER_COST = 2;
+double PLASTIC_CRAFT_OIL_COST = 15;
+double PLASTIC_CRAFT_TIME = 5;
+
+double ROCKET_CRAFT_IRON_COST = 80000;
+double ROCKET_CRAFT_COPPER_COST = 60000;
+double ROCKET_CRAFT_OIL_COST = 0;
+double ROCKET_CRAFT_MACHINES_COST = 15000;
+double ROCKET_CRAFT_CIRCUITS_COST = 25000;
+double ROCKET_CRAFT_PLASTIC_COST = 10000;
+double ROCKET_CRAFT_ROCKET_FUEL_COST = 600;
+double ROCKET_CRAFT_TIME = 600;
+
+double BOOSTER_CRAFT_IRON_COST = 30000;
+double BOOSTER_CRAFT_COPPER_COST = 20000;
+double BOOSTER_CRAFT_OIL_COST = 0;
+double BOOSTER_CRAFT_MACHINES_COST = 2000;
+double BOOSTER_CRAFT_CIRCUITS_COST = 1000;
+double BOOSTER_CRAFT_PLASTIC_COST = 100;
+double BOOSTER_CRAFT_ROCKET_FUEL_COST = 200;
+double BOOSTER_CRAFT_TIME = 1800;
+
+double ROCKET_FUEL_CRAFT_OIL_COST = 1000;
+double ROCKET_FUEL_CRAFT_TIME = 60;
+
+double MACHINES_STATION_IRON_COST = 1500;
+double MACHINES_STATION_COPPER_COST = 3000;
+
+double CIRCUITS_STATION_IRON_COST = 3000;
+double CIRCUITS_STATION_COPPER_COST = 1500;
+
+double PLASTIC_STATION_IRON_COST = 4000;
+double PLASTIC_STATION_COPPER_COST = 5000;
+double PLASTIC_STATION_MACHINES_COST = 500;
+
+double ROCKET_STATION_IRON_COST = 20000;
+
+double BOOSTER_STATION_IRON_COST = 5000;
+double BOOSTER_STATION_COPPER_COST = 5000;
+double BOOSTER_STATION_OIL_COST = 0;
+double BOOSTER_STATION_MACHINES_COST = 2000;
+double BOOSTER_STATION_CIRCUTS_COST = 2000;
+double BOOSTER_STATION_PLASTIC_COST = 1000;
+
+double ROCKET_FUEL_STATION_IRON_COST = 3000;
+double ROCKET_FUEL_STATION_COPPER_COST = 6000;
+double ROCKET_FUEL_STATION_PLASTIC_COST = 1500;
+
+int SHORT_TIME_WARP = 2400;
+int LONG_TIME_WARP = 7200;
 
 vector<Deposit> IRON_DEPOSITS = {
     Deposit('i', "bjc", 60000, 2, 1, 2),
@@ -256,15 +350,13 @@ vector<Deposit> OIL_DEPOSITS = {
     Deposit('o', "lae", 1000000, 90, 2, 37)
 };
 
-set<string> commands = {"mine", "belt", "train", "pipe", "make", "build", "stored", "depo", "skip", "prod", "buildings", "ratio"};
+set<string> commands = {"mine", "belt", "train", "pipe", "make", "build", "stored", "depo", "skip", "prod", "ratio", "all", "hint"};
+vector<string> station_names = {"mach", "circ", "plas", "rock", "boos", "fuel"};
 
 // Inicializace objektů surovin
 vector<pair<int, double> > st_i = {make_pair(0, INIT_IRON_STORED), make_pair(1, INIT_COPPER_STORED), make_pair(2, INIT_OIL_STORED)};
-Resources<double> team_stored = Resources(st_i);
 vector<pair<int, double> > basic_prod_i = {make_pair(0, (double)IRON_PRODUCTION), make_pair(1, (double)COPPER_PRODUCTION), make_pair(2, (double)OIL_PRODUCTION)};
 Resources<double> team_basic_production = Resources(basic_prod_i);
-vector<pair<int, double> > prod_i = {};
-Resources<double> team_production = Resources(prod_i);
 vector<pair<int, double> > belt_i = {{0, BELT_IRON_COST}, {1, BELT_COPPER_COST}};
 Resources<double> belt_cost = Resources(belt_i);
 vector<pair<int, double> > train_i = {{0, TRAIN_IRON_COST}, {1, TRAIN_COPPER_COST}, {3, TRAIN_MACHINES_COST}, {4, TRAIN_CIRCUITS_COST}, {5, TRAIN_PLASTIC_COST}};
@@ -284,16 +376,27 @@ Resources<double> copper_deposit_2_cost = Resources(copper_deposit_2_i);
 vector<pair<int, double> > oil_deposit_2_i = {{0, OIL_DEPOSIT_2_IRON_COST}, {1, OIL_DEPOSIT_2_COPPER_COST}};
 Resources<double> oil_deposit_2_cost = Resources(oil_deposit_2_i);
 
+vector<pair<int, double> > machines_craft_in_i = {{0, MACHINES_CRAFT_IRON_COST}, {1, MACHINES_CRAFT_COPPER_COST}, {2, MACHINES_CRAFT_OIL_COST}, {9, MACHINES_CRAFT_TIME}};
+vector<pair<int, double> > circuits_craft_in_i = {{0, CIRCUITS_CRAFT_IRON_COST}, {1, CIRCUITS_CRAFT_COPPER_COST}, {2, CIRCUITS_CRAFT_OIL_COST}, {9, CIRCUITS_CRAFT_TIME}};
+vector<pair<int, double> > plastic_craft_in_i = {{0, PLASTIC_CRAFT_IRON_COST}, {1, PLASTIC_CRAFT_COPPER_COST}, {2, PLASTIC_CRAFT_OIL_COST}, {9, PLASTIC_CRAFT_TIME}};
+vector<pair<int, double> > rocket_craft_in_i = {{0, ROCKET_CRAFT_IRON_COST}, {1, ROCKET_CRAFT_COPPER_COST}, {2, ROCKET_CRAFT_OIL_COST}, {3, ROCKET_CRAFT_MACHINES_COST}, {4, ROCKET_CRAFT_CIRCUITS_COST}, {5, ROCKET_CRAFT_PLASTIC_COST}, {8, ROCKET_CRAFT_ROCKET_FUEL_COST}, {9, ROCKET_CRAFT_TIME}};
+vector<pair<int, double> > booster_craft_in_i = {{0, BOOSTER_CRAFT_IRON_COST}, {1, BOOSTER_CRAFT_COPPER_COST}, {2, BOOSTER_CRAFT_OIL_COST}, {3, BOOSTER_CRAFT_MACHINES_COST}, {4, BOOSTER_CRAFT_CIRCUITS_COST}, {5, BOOSTER_CRAFT_PLASTIC_COST}, {8, BOOSTER_CRAFT_ROCKET_FUEL_COST}, {9, BOOSTER_CRAFT_TIME}};
+vector<pair<int, double> > rocket_fuel_craft_in_i = {{2, ROCKET_FUEL_CRAFT_OIL_COST}, {9, ROCKET_FUEL_CRAFT_TIME}};
+
 // Pomocné proměnné
 
-map<int, int> indices_in_all_deposits_by_index; // Ukládají se změny během jednoho tiku
 vector<Deposit> all_deposits(IRON_DEPOSITS);  // Neukládají se změny během jednoho tiku
-vector<pair<int, double> > zero_vector = {{}};
+Resources<double> team_production = Resources(zero_vector);
+Resources<double> team_average_production(zero_vector);
 Resources<double> prod_from_belts = Resources(zero_vector);
 Resources<double> prod_from_trains = Resources(zero_vector);
-Resources<double> prod_from_craft = Resources(zero_vector);
+pair<Resources<double>, Resources<double> > prod_from_craft = {Resources(zero_vector), Resources(zero_vector)};
+
+CraftingStation crafting_station_blueprints[6];
 
 // Proměnné zachycující současný stav
+
+Resources<double> team_stored = Resources(st_i);
 
 vector<vector<pair<int, int> > > belt_graph(points.size());  // vrchol, id hrany
 vector<vector<int> > train_graph(points.size());
@@ -304,40 +407,43 @@ vector<Deposit> copper_deposits_activated;
 vector<Deposit> oil_deposits_activated;
 vector<Deposit> all_deposits_activated;
 vector<Deposit> all_deposits_activated_with_changes;
+map<int, int> indices_in_all_deposits_by_index; // Ukládají se změny během jednoho tiku
+
 int ticks_passed = 0;
 int belt_edge_id = 0;
 int total_deposits_activated = 0;
+
+vector<CraftingStation> all_crafting_stations;
 
 double iron_copper_constant = 1;
 string oil_priority = "mine"; // "craft" nebo "mine"
 
 bool lvl2_deposits_unlocked = 0;
 bool lvl1_deposit_build_from_base = 0;
+bool crafting_unlocked = 0;
+bool lvl2_ciphers_unlocked = 0;
+bool lvl3_ciphers_unlocked = 0;
+vector<pair<pair<int, string>, pair<int, bool> > > active_ciphers; // index, sol, lvl, hint_shown
+int left_level = 0;
+int right_level = 0;
 
-void initValues(){
-    all_deposits.insert(all_deposits.end(), COPPER_DEPOSITS.begin(), COPPER_DEPOSITS.end());
-    all_deposits.insert(all_deposits.end(), OIL_DEPOSITS.begin(), OIL_DEPOSITS.end());
-
-    all_deposits_activated.reserve(200);
-    iron_deposits_activated.reserve(50);
-    copper_deposits_activated.reserve(50);
-    oil_deposits_activated.reserve(50);
-    all_deposits_activated_with_changes.reserve(200);
-
-    if(debug) lvl1_deposit_build_from_base = true;
-    if(debug) lvl2_deposits_unlocked = true;
-}
+bool first_step = 0;
+bool second_step = 0;
 
 // Pomocné funkce
 
-bool equals(string s, string t){
-    if(s.length() != t.length()) return 0;
-
-    for(int i = 0; i<s.length(); i++){
-        if(tolower(s[i]) != tolower(t[i])) return 0;
+string tolower(string s){
+    for(int i = 0; i<s.size(); i++){
+        if(s[i] <= 'Z' && s[i] >= 'A') s[i] += 'a' - 'A';
     }
 
-    return 1;
+    return s;
+}
+
+bool equals(string s, string t){
+    if(s.length() != t.length()) return 0;
+    if(tolower(s) == tolower(t)) return 1;
+    return 0;
 }
 
 bool areDistinctPoints(int i, int j){
@@ -350,6 +456,52 @@ double distance(int i, int j){
       + (0.63338087263 *(points[i][1] - points[j][1]))*(0.63338087263 *(points[i][1] - points[j][1]))));
 
     // = cos(50.7)
+}
+
+void buildCraftingStation(string type){
+    Resources<double> cost = Resources(zero_vector);
+    int index_in_blueprints;
+
+    if(type == "mach"){
+        cost = Resources<double>({{0, MACHINES_STATION_IRON_COST}, {1, MACHINES_STATION_COPPER_COST}});
+        index_in_blueprints = 0;
+    }
+    else if(type == "circ"){
+        cost = Resources<double>({{0, CIRCUITS_STATION_IRON_COST}, {1, CIRCUITS_STATION_COPPER_COST}});
+        index_in_blueprints = 1;
+    }
+    else if(type == "plas"){
+        cost = Resources<double>({{0, PLASTIC_STATION_IRON_COST}, {1, PLASTIC_STATION_COPPER_COST}, {3, PLASTIC_STATION_MACHINES_COST}});
+        index_in_blueprints = 2;
+    }
+    else if(type == "rock"){
+        cost = Resources<double>({{0, ROCKET_STATION_IRON_COST}});
+        index_in_blueprints = 3;
+    }
+    else if(type == "boos"){
+        cost = Resources<double>({{0, BOOSTER_STATION_IRON_COST}, {1, BOOSTER_STATION_COPPER_COST}, {2, BOOSTER_STATION_OIL_COST}, {3, BOOSTER_STATION_MACHINES_COST}, {4, BOOSTER_STATION_CIRCUTS_COST}, {5, BOOSTER_STATION_PLASTIC_COST}});
+        index_in_blueprints = 4;
+    }
+    else if(type == "fuel"){
+        cost = Resources<double>({{0, ROCKET_FUEL_STATION_IRON_COST}, {1, ROCKET_FUEL_STATION_COPPER_COST}, {5, ROCKET_FUEL_STATION_PLASTIC_COST}});
+        index_in_blueprints = 5;
+    }
+    else{
+        cout << "BUG 2" << endl;
+        return;
+    }
+
+    if(debug || team_stored.less_than(cost)){
+        crafting_station_blueprints[index_in_blueprints].type = type;
+        all_crafting_stations.push_back(crafting_station_blueprints[index_in_blueprints]);
+        team_stored.subtract(cost);
+        cout << "Craftící stanice úspěšně postavena" << endl;
+    }
+
+    else{
+        cout << "Nemáte dostatek surovin na stavbu." << endl;
+        return;
+    }
 }
 
 void buildTrain(int v1, int v2){
@@ -554,6 +706,31 @@ Resources<double> produceFromBelts(){
     }
 
     return belt_prod;
+}
+
+void craftAmount(int num_to_be_crafted, string type){
+    int num_crafted = 0;
+    Resources<double> cost_required = Resources<double>(zero_vector);
+
+    for(CraftingStation &crafting_station: all_crafting_stations){
+        if(crafting_station.type == type && num_crafted < num_to_be_crafted){
+            if(!crafting_station.active){
+                crafting_station.active = 1;
+                num_crafted++;
+            }
+        }
+
+        else if(crafting_station.type == type){
+            if(crafting_station.producing){
+                cost_required.subtract(crafting_station.in);
+            }
+            crafting_station.active = 0;
+            crafting_station.producing = 0;
+        }
+    }
+
+    team_stored.subtract(cost_required);
+    cout << "Craftění úspěšně zahájeno / ukončeno" << endl;
 }
 
 // min cost max flow
@@ -790,10 +967,39 @@ Resources<double> produceFromTrains(){
     return train_prod;
 }
 
-Resources<double> produceFromCrafting(){
-    Resources<double> craft_prod = Resources(zero_vector);
+pair<Resources<double>, Resources<double> > produceFromCrafting(){
+    Resources<double> craft_prod_average = Resources(zero_vector);
+    Resources<double> craft_prod_cur = Resources(zero_vector);
 
-    return craft_prod;
+    vector<int> random_indices(all_crafting_stations.size());
+    iota(random_indices.begin(), random_indices.end(), 0);
+
+    for(CraftingStation &crafting_station: all_crafting_stations){
+        if(crafting_station.active){
+            craft_prod_average.add(crafting_station.out.constant_multiply((double)1 / crafting_station.in.time));
+            craft_prod_average.subtract(crafting_station.in.constant_multiply((double)1 / crafting_station.in.time));
+
+            if(crafting_station.producing && ((crafting_station.tick_when_starts_producing + crafting_station.in.time) == ticks_passed)){
+                crafting_station.producing = 0;
+                craft_prod_cur.add(crafting_station.out);
+            }
+        }
+    }
+
+    for(int i: random_indices){
+        if(all_crafting_stations[i].active && !all_crafting_stations[i].producing){
+            craft_prod_cur.subtract(all_crafting_stations[i].in);
+            if(!debug && team_stored.less_than(craft_prod_cur.constant_multiply(-1))){
+                craft_prod_cur.add(all_crafting_stations[i].in);
+                continue;
+            }
+
+            all_crafting_stations[i].producing = 1;
+            all_crafting_stations[i].tick_when_starts_producing = ticks_passed;
+        }
+    }
+
+    return {craft_prod_average, craft_prod_cur};
 }
 
 void updateCapacities(){
@@ -835,26 +1041,23 @@ vector<string> tokenise(string user_input){
     return tokens;
 }
 
-// main funkce
+// main funkce .................................//
 
 void doMainStuff(){
-    ticks_passed++;
-
     if(debug){
         //cout << "ONE_TICK" << endl;
     }
 
     Resources<double> team_cur_production = Resources(zero_vector);
-    team_cur_production.add(team_basic_production);
 
-    /*
-    for(Deposit deposit: all_deposits_activated){
-        indices_in_all_deposits_by_index[deposit.i] = &deposit;
-    }
-    */
+    team_cur_production.add(team_basic_production);
 
     prod_from_belts = produceFromBelts();
     team_cur_production.add(prod_from_belts);
+
+    Resources<double> team_cur_average_production = team_cur_production;
+    Resources<double> cur_prod_from_craft = prod_from_craft.second;
+    Resources<double> average_prod_from_craft = prod_from_craft.first;
 
     if(oil_priority == "mine"){
         prod_from_trains = produceFromTrains();
@@ -870,9 +1073,13 @@ void doMainStuff(){
     //prod_from_trains.print(1);
 
     team_cur_production.add(prod_from_trains);
-    team_cur_production.add(prod_from_craft);
+    team_cur_production.add(cur_prod_from_craft);
+    team_cur_average_production.add(prod_from_trains);
+    team_cur_average_production.add(average_prod_from_craft);
 
     team_production = team_cur_production;
+    team_average_production = team_cur_average_production;
+
     team_stored.add(team_production);
 
     updateCapacities();
@@ -997,6 +1204,10 @@ void *readInput(void* input){
             team_stored.print(0);
         }
 
+        if(equals(command, "time")){
+            cout << "Sekundy uplynulé od začátku hry: " << ticks_passed << endl;
+        }
+
         if(equals(command, "prod")){
             vector<string> tokens = tokenise(user_input);
 
@@ -1007,26 +1218,26 @@ void *readInput(void* input){
 
             if(tokens.size() == 0){
                 cout << "Produkce přicházející na základnu:" << endl;
-                team_production.print(1);
+                team_average_production.print(3);
                 continue;
             }
 
             string token = tokens[0];
             if(equals(token, "belt")){
                 cout << "Produkce přicházející na základnu z pásů:" << endl;
-                prod_from_belts.print(1);
+                prod_from_belts.print(3);
                 continue;
             }
 
             else if(equals(token, "train")){
                 cout << "Produkce přicházející na základnu z vlaků:" << endl;
-                prod_from_trains.print(1);
+                prod_from_trains.print(3);
                 continue;
             }
 
             else if(equals(token, "craft")){
                 cout << "Produkce přicházející na základnu z craftění:" << endl;
-                prod_from_craft.print(1);
+                prod_from_craft.first.print(3);
                 continue;
             }
 
@@ -1036,33 +1247,113 @@ void *readInput(void* input){
             }
         }
 
-        if(equals(command, "depo")){
-            cout << "Aktivovaná ložiska železa: ";
-            for(Deposit deposit: iron_deposits_activated){
-                cout << deposit.i << " ";
+        if(equals(command, "all")){
+            vector<string> tokens = tokenise(user_input);
+            if(tokens.size() >= 3 || tokens.size() == 0){
+                cout << "Neplatný vstup" << endl;
+                continue;
             }
-            cout << endl;
 
-            cout << "Aktivovaná ložiska měďi: ";
-            for(Deposit deposit: copper_deposits_activated){
-                cout << deposit.i << " ";
-            }
-            cout << endl;
+            string token = tokens[0];
 
-            cout << "Aktivovaná ložiska ropy: ";
-            for(Deposit deposit: oil_deposits_activated){
-                cout << deposit.i << " ";
-            }
-            cout << endl;
+            if(equals(token, "depo")){
+                cout << "Aktivovaná ložiska železa: ";
+                for(Deposit deposit: iron_deposits_activated){
+                    cout << deposit.i << " ";
+                }
+                cout << endl;
 
-            cout << "Všechna aktivovaná ložiska: ";
-            for(Deposit deposit: all_deposits_activated){
-                cout << deposit.i << " ";
+                cout << "Aktivovaná ložiska měďi: ";
+                for(Deposit deposit: copper_deposits_activated){
+                    cout << deposit.i << " ";
+                }
+                cout << endl;
+
+                cout << "Aktivovaná ložiska ropy: ";
+                for(Deposit deposit: oil_deposits_activated){
+                    cout << deposit.i << " ";
+                }
+                cout << endl;
+
+                cout << "Všechna aktivovaná ložiska: ";
+                for(Deposit deposit: all_deposits_activated){
+                    cout << deposit.i << " ";
+                }
+                cout << endl;
             }
-            cout << endl;
+
+            else if(equals(token, "craft")){
+                for(int i = 0; i<6; i++){
+                    cout << "Počet craftících stanic typu " << station_names[i] << ": ";
+
+                    if(tokens.size() == 2){
+                        if(equals(tokens[1], "active")) cout << "(aktivních) ";
+                    }
+
+                    int cnt = 0;
+                    for(CraftingStation crafting_station: all_crafting_stations){
+                        if(tokens.size() == 2){
+                            if(equals(tokens[1], "active") && crafting_station.type == station_names[i] && crafting_station.active) cnt++;
+                            else if(!equals(tokens[1], "active") && crafting_station.type == station_names[i]) cnt++;
+                        }
+
+                        else if(crafting_station.type == station_names[i]) cnt++;
+                    }
+
+                    cout << cnt << endl;
+                }
+            }
+
+            else if(equals(token, "cipher")){
+                cout << "Aktivní šifry jsou na stanovištích:" << endl;
+                for(auto ciph: active_ciphers){
+                    cout << ciph.first.first << " ";
+                }
+                cout << endl;
+            }
+
+            else{
+                cout << "Neplatný vstup" << endl;
+            }
         }
 
-        if(equals(command, "skip")){
+        if(equals(command, "make")){
+            vector<string> tokens = tokenise(user_input);
+            if(tokens.size() != 2){
+                cout << "Neplatný vstup" << endl;
+                continue;
+            }
+
+            int num_to_be_active;
+
+            try{
+                num_to_be_active = stoi(tokens[0]);
+            }
+
+            catch(...){
+                cout << "Neplatný vstup" << endl;
+                continue;
+            }
+
+            if(find(station_names.begin(), station_names.end(), tolower(tokens[1])) == station_names.end()){
+                cout << "Špatný kód suroviny" << endl;
+                continue;
+            }
+
+            int num_crafting_stations = 0;
+            for(CraftingStation crafting_station: all_crafting_stations){
+                if(crafting_station.type == tolower(tokens[1])) num_crafting_stations++;
+            }
+
+            if(num_crafting_stations < num_to_be_active || num_to_be_active < 0){
+                cout << "Chcete vyrobit víc, než máte postaveno, nebo záporně." << endl;
+                continue;
+            }
+
+            craftAmount(num_to_be_active, tolower(tokens[1]));
+        }
+
+        if((debug || playtest) && equals(command, "skip")){
             vector<string> tokens = tokenise(user_input);
             if(tokens.size() != 1){
                 cout << "Neplatný vstup" << endl;
@@ -1087,6 +1378,7 @@ void *readInput(void* input){
             int rc;
             pthread_t skip_thread;
             rc = pthread_create(&skip_thread, NULL, doStuffForSomeTime, &t);
+            ticks_passed += t;
         }
 
         //cout << command << "   " << user_input << endl;
@@ -1211,8 +1503,243 @@ void *readInput(void* input){
             else cout << "Neplatný vstup" << endl;
         }
 
+        if((debug || crafting_unlocked) && equals(command, "build")){
+            vector<string> tokens = tokenise(user_input);
+            if(tokens.size() != 1){
+                cout << "Neplatný vstup" << endl;
+                continue;
+            }
+
+            string token = tokens[0];
+            if(find(station_names.begin(), station_names.end(), tolower(token)) == station_names.end()){
+                cout << "Neplatný vstup" << endl;
+                continue;
+            }
+
+            buildCraftingStation(token);
+        }
+
+        if(equals(command, "hint")){
+            vector<string> tokens = tokenise(user_input);
+            if(tokens.size() != 1){
+                cout << "Neplatný vstup" << endl;
+                continue;
+            }
+
+            int index;
+            try{
+                index = stoi(tokens[0]);
+            }
+
+            catch(...){
+                cout << "Neplatný vstup" << endl;
+                continue;
+            }
+
+            bool hinted = 0;
+            for(auto &cipher: active_ciphers){
+                if(cipher.first.first == index){
+                    cipher.second.second = 1;
+                    hinted = 1;
+
+                    cout << hints[index] << endl;
+                }
+            }
+
+            if(!hinted) cout << "Špatně zadané číslo šifry, může být ještě vám skrytá, nebo je už vyřešená" << endl;
+        }
+
+        for(int i = active_ciphers.size() - 1; i>=0; i--){
+            if(equals(command, active_ciphers[i].first.second) && !active_ciphers[i].second.second){
+                string improvement_command;
+                active_ciphers.erase(active_ciphers.begin() + i);
+
+                while(1){
+                    cout << "Gratulace. Úspěšně jste vyřešili šifru. Nyní si vyberte bonus." << endl;
+                    cout << "Na výběr máte:" << endl;
+                    cout << "Plus jeden level na obou stromech - kód lvl." << endl;
+                    cout << "Maximální level na stromu napravo a kratší timewarp - kód ciph." << endl;
+                    cout << "Delší timewarp - kód tw." << endl;
+
+                    getline(cin, improvement_command);
+                    if(equals(improvement_command, "lvl")){
+                        left_level++;
+                        right_level++;
+
+                        if(left_level == 3) lvl1_deposit_build_from_base = 1;
+                        if(left_level == 4) lvl2_deposits_unlocked = 1;
+                        if(right_level == 1){
+                            cout << "Další šifry jsou na lokacích: ";
+                            for(auto cipher: lvl2_ciphers){
+                                active_ciphers.push_back({cipher, {2, 0}});
+                                cout << cipher.first << " ";
+                            }
+                            cout << endl;
+                        }
+                        if(right_level == 2){
+                            cout << "Další šifry jsou na lokacích: ";
+                            for(auto cipher: lvl3_ciphers){
+                                active_ciphers.push_back({cipher, {3, 0}});
+                                cout << cipher.first << " ";
+                            }
+                            cout << endl;
+                        }
+
+                        cout << "Vylepšení stromu provedeno." << endl;
+                        break;
+                    }
+
+                    else if(equals(improvement_command, "ciph")){
+                        if(right_level == 0){
+                            cout << "Další šifry jsou na lokacích: ";
+                            for(auto cipher: lvl2_ciphers){
+                                active_ciphers.push_back({cipher, {2, 0}});
+                                cout << cipher.first << " ";
+                            }
+                            cout << endl;
+
+                            cout << "Další šifry jsou na lokacích: ";
+                            for(auto cipher: lvl3_ciphers){
+                                active_ciphers.push_back({cipher, {3, 0}});
+                                cout << cipher.first << " ";
+                            }
+                            cout << endl;
+                        }
+
+                        if(right_level == 1){
+                            cout << "Další šifry jsou na lokacích: ";
+                            for(auto cipher: lvl3_ciphers){
+                                active_ciphers.push_back({cipher, {3, 0}});
+                                cout << cipher.first << " ";
+                            }
+                            cout << endl;
+                        }
+
+                        cout << "Vylepšení pravého stromu provedeno." << endl;
+
+                        right_level = 2;
+                        for(int i = 0; i<SHORT_TIME_WARP; i++){
+                            doMainStuff();
+                        }
+
+                        cout << "Time warp úspěšně dokončen." << endl;
+                        break;
+                    }
+
+                    else if(equals(improvement_command, "tw")){
+                        for(int i = 0; i<SHORT_TIME_WARP; i++){
+                            doMainStuff();
+                        }
+
+                        cout << "Time warp úspěšně dokončen." << endl;
+                        break;
+                    }
+
+                    else{
+                        cout << "Špatně zadaný příkaz. Přece proboha chcete tu odměnu, ne?" << endl;
+                    }
+                }
+            }
+
+            else if(equals(command, active_ciphers[i].first.second)){
+                string improvement_command;
+                active_ciphers.erase(active_ciphers.begin() + i);
+
+                while(1){
+                    cout << "Gratulace. Úspěšně jste vyřešili šifru s hintem. Nyní si vyberte bonus." << endl;
+                    cout << "Na výběr máte:" << endl;
+                    cout << "Plus jeden level na stromu napravo - kód ciph." << endl;
+                    cout << "Odemknutí craftění - kód craft." << endl;
+                    cout << "Kratší timewarp - kód tw." << endl;
+
+                    getline(cin, improvement_command);
+
+                    if(equals(improvement_command, "ciph")){
+                        if(right_level == 0){
+                            cout << "Další šifry jsou na lokacích: ";
+                            for(auto cipher: lvl2_ciphers){
+                                active_ciphers.push_back({cipher, {2, 0}});
+                                cout << cipher.first << " ";
+                            }
+                            cout << endl;
+                        }
+
+                        if(right_level == 1){
+                            cout << "Další šifry jsou na lokacích: ";
+                            for(auto cipher: lvl3_ciphers){
+                                active_ciphers.push_back({cipher, {3, 0}});
+                                cout << cipher.first << " ";
+                            }
+                            cout << endl;
+                        }
+
+                        cout << "Vylepšení pravého stromu provedeno." << endl;
+
+                        right_level++;
+                        break;
+                    }
+
+                    else if(equals(improvement_command, "tw")){
+                        for(int i = 0; i<SHORT_TIME_WARP; i++){
+                            doMainStuff();
+                        }
+
+                        cout << "Time warp úspěšně dokončen." << endl;
+                        break;
+                    }
+
+                    else if(equals(improvement_command, "craft")){
+                        crafting_unlocked = 1;
+                        cout << "Craftění odemčeno" << endl;
+                        break;
+                    }
+
+                    else{
+                        cout << "Špatně zadaný příkaz. Přece proboha chcete tu odměnu, ne?" << endl;
+                    }
+                }
+            }
+        }
+
     }
     pthread_exit(NULL);
+}
+
+void initValues(){
+    all_deposits.insert(all_deposits.end(), COPPER_DEPOSITS.begin(), COPPER_DEPOSITS.end());
+    all_deposits.insert(all_deposits.end(), OIL_DEPOSITS.begin(), OIL_DEPOSITS.end());
+
+    all_deposits_activated.reserve(200);
+    iron_deposits_activated.reserve(50);
+    copper_deposits_activated.reserve(50);
+    oil_deposits_activated.reserve(50);
+    all_deposits_activated_with_changes.reserve(200);
+
+    if(debug) lvl1_deposit_build_from_base = true;
+    if(debug) lvl2_deposits_unlocked = true;
+
+    crafting_station_blueprints[0].in = machines_craft_in_i;
+    crafting_station_blueprints[0].out = Resources<double>({{3, (double)1}});
+
+    crafting_station_blueprints[1].in = circuits_craft_in_i;
+    crafting_station_blueprints[1].out = Resources<double>({{4, (double)1}});
+
+    crafting_station_blueprints[2].in = plastic_craft_in_i;
+    crafting_station_blueprints[2].out = Resources<double>({{5, (double)1}});
+
+    crafting_station_blueprints[3].in = rocket_craft_in_i;
+    crafting_station_blueprints[3].out = Resources<double>({{6, (double)1}});
+
+    crafting_station_blueprints[4].in = booster_craft_in_i;
+    crafting_station_blueprints[4].out = Resources<double>({{3, (double)1}});
+
+    crafting_station_blueprints[5].in = rocket_fuel_craft_in_i;
+    crafting_station_blueprints[5].out = Resources<double>({{3, (double)1}});
+
+    for(int i = 0; i<lvl1_ciphers.size(); i++){
+        commands.insert(tolower(lvl1_ciphers[i].second));
+        active_ciphers.push_back({lvl1_ciphers[i], {1, 0}});
+    }
 }
 
 int main(){
@@ -1230,6 +1757,7 @@ int main(){
     while(1){
         // Jeden tik je jedna vteřina.
         this_thread::sleep_for(timespan);
+        ticks_passed++;
         doMainStuff();
     }
 }
