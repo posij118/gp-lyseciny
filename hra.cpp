@@ -14,7 +14,7 @@
 using namespace std;
 
 // Debug musí být false.
-bool debug = true;
+bool debug = false;
 
 // Playtest musí být false.
 bool playtest = true;
@@ -218,8 +218,8 @@ int OIL_PRODUCTION = 0;
 
 double GLOBAL_TRANSPORT_COST_COEFFICIENT = 80000;
 
-double BELT_IRON_COST = 3;
-double BELT_COPPER_COST = 1;
+double BELT_IRON_COST = 4.8;
+double BELT_COPPER_COST = 1.6;
 
 double TRAIN_IRON_COST = 2;
 double TRAIN_COPPER_COST = 1;
@@ -261,25 +261,25 @@ double PLASTIC_CRAFT_COPPER_COST = 2;
 double PLASTIC_CRAFT_OIL_COST = 15;
 double PLASTIC_CRAFT_TIME = 5;
 
-double ROCKET_CRAFT_IRON_COST = 80000;
-double ROCKET_CRAFT_COPPER_COST = 60000;
+double ROCKET_CRAFT_IRON_COST = 120000;
+double ROCKET_CRAFT_COPPER_COST = 90000;
 double ROCKET_CRAFT_OIL_COST = 0;
-double ROCKET_CRAFT_MACHINES_COST = 15000;
-double ROCKET_CRAFT_CIRCUITS_COST = 25000;
-double ROCKET_CRAFT_PLASTIC_COST = 10000;
+double ROCKET_CRAFT_MACHINES_COST = 25000;
+double ROCKET_CRAFT_CIRCUITS_COST = 35000;
+double ROCKET_CRAFT_PLASTIC_COST = 15000;
 double ROCKET_CRAFT_ROCKET_FUEL_COST = 600;
 double ROCKET_CRAFT_TIME = 600;
 
-double BOOSTER_CRAFT_IRON_COST = 30000;
-double BOOSTER_CRAFT_COPPER_COST = 20000;
+double BOOSTER_CRAFT_IRON_COST = 40000;
+double BOOSTER_CRAFT_COPPER_COST = 30000;
 double BOOSTER_CRAFT_OIL_COST = 0;
-double BOOSTER_CRAFT_MACHINES_COST = 2000;
-double BOOSTER_CRAFT_CIRCUITS_COST = 1000;
-double BOOSTER_CRAFT_PLASTIC_COST = 100;
+double BOOSTER_CRAFT_MACHINES_COST = 3000;
+double BOOSTER_CRAFT_CIRCUITS_COST = 2000;
+double BOOSTER_CRAFT_PLASTIC_COST = 200;
 double BOOSTER_CRAFT_ROCKET_FUEL_COST = 200;
 double BOOSTER_CRAFT_TIME = 1800;
 
-double ROCKET_FUEL_CRAFT_OIL_COST = 1000;
+double ROCKET_FUEL_CRAFT_OIL_COST = 1500;
 double ROCKET_FUEL_CRAFT_TIME = 60;
 
 double MACHINES_STATION_IRON_COST = 1500;
@@ -308,16 +308,16 @@ double ROCKET_FUEL_STATION_PLASTIC_COST = 1500;
 double CRAFTING_UNLOCK_IRON_COST = 5000;
 double CRAFTING_UNLOCK_COPPER_COST = 5000;
 
-double FROM_BASE_UNLOCK_IRON_COST = 50000;
-double FROM_BASE_UNLOCK_COPPER_COST = 50000;
+double FROM_BASE_UNLOCK_IRON_COST = 70000;
+double FROM_BASE_UNLOCK_COPPER_COST = 70000;
 double LVL2_UNLOCK_IRON_COST = 50000;
 double LVL2_UNLOCK_COPPER_COST = 50000;
-double LVL2_UNLOCK_MACHINES_COST = 5000;
-double LVL2_UNLOCK_CIRCUITS_COST = 5000;
-double LVL2_UNLOCK_PLASTIC_COST = 2000;
+double LVL2_UNLOCK_MACHINES_COST = 10000;
+double LVL2_UNLOCK_CIRCUITS_COST = 10000;
+double LVL2_UNLOCK_PLASTIC_COST = 5000;
 
-int SHORT_TIME_WARP = 2400;
-int LONG_TIME_WARP = 7200;
+int SHORT_TIME_WARP = 1800;
+int LONG_TIME_WARP = 5400;
 
 vector<Deposit> IRON_DEPOSITS = {
     Deposit('i', "bjc", 60000, 2, 1, 2),
@@ -362,7 +362,7 @@ vector<Deposit> OIL_DEPOSITS = {
     Deposit('o', "lae", 1000000, 90, 2, 37)
 };
 
-set<string> commands = {"mine", "belt", "train", "pipe", "make", "build", "stored", "skip", "prod", "ratio", "all", "hint", "unlock", "time"};
+set<string> commands = {"mine", "belt", "train", "pipe", "make", "build", "stored", "skip", "prod", "ratio", "all", "hint", "unlock", "time", "oil"};
 vector<string> station_names = {"mach", "circ", "plas", "rock", "boos", "fuel"};
 
 // Inicializace objektů surovin
@@ -577,7 +577,13 @@ void buildBelt(int from, int to){
     }
     // Konec DFS
 
+    bool same_belt_exists = 0;
+    for(auto too: belt_graph[from - 1]){
+        if(to - 1 == too.first) same_belt_exists = 1;
+    }
+
     Resources<double> cost = belt_cost.constant_multiply(GLOBAL_TRANSPORT_COST_COEFFICIENT * distance(from - 1, to - 1));
+    if(same_belt_exists) cost = cost.constant_multiply(0.5);
 
     cout << "Postavení takového pásu vás bude stát:" << endl;
     cost.print(0);
@@ -1730,7 +1736,7 @@ void *readInput(void* input){
                 }
 
                 team_stored.subtract(lvl2_unlock_cost);
-                left_level = 4;
+                left_level = 5;
                 lvl2_deposits_unlocked = 1;
                 cout << "Těžba ze základny odemčena." << endl;
             }
@@ -1753,14 +1759,14 @@ void *readInput(void* input){
                     cout << "Nechat si bonus na jindy - kód back." << endl;
 
                     getline(cin, improvement_command);
-                    if(equals(improvement_command, "lvl") && (left_level < 4 || right_level < 2)){
+                    if(equals(improvement_command, "lvl") && (left_level < 5 || right_level < 2)){
                         active_ciphers.erase(active_ciphers.begin() + i);
                         commands.erase(tolower(command));
                         left_level++;
                         right_level++;
 
                         if(left_level == 3) lvl1_deposit_build_from_base = 1;
-                        if(left_level == 4) lvl2_deposits_unlocked = 1;
+                        if(left_level == 5) lvl2_deposits_unlocked = 1;
                         if(right_level == 1){
                             cout << "Další šifry jsou na lokacích: ";
                             for(auto cipher: lvl2_ciphers){
